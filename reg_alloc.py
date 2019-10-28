@@ -55,7 +55,7 @@ def pebbleGame(g,out,dev,cycles,outf=None,oneshot=True,sliding=True,timeout=None
     for v in out:
         s.add(assigned[v][T] == True)
 
-    sliding = True 
+    
     if not sliding:
         # register allocation 
         for t in range(1,T+1):
@@ -111,13 +111,14 @@ def pebbleGame(g,out,dev,cycles,outf=None,oneshot=True,sliding=True,timeout=None
                         
 
     # constraint on single time computation
-    for v in range(V):
+    if oneshot:
+        for v in range(V):
 
-        for t in range(2,T+1):
-            OrTerm = []
-            for oldt in range(t):
-                OrTerm.append(And(assigned[v][oldt], Not(assigned[v][oldt+1])))
-            s.add(Or(Not(Or(OrTerm)), Not(assigned[v][t])))
+            for t in range(2,T+1):
+                OrTerm = []
+                for oldt in range(t):
+                    OrTerm.append(And(assigned[v][oldt], Not(assigned[v][oldt+1])))
+                s.add(Or(Not(Or(OrTerm)), Not(assigned[v][t])))
 
     # constraint on number of allocations
     for t in range(1,T+1):
@@ -129,9 +130,11 @@ def pebbleGame(g,out,dev,cycles,outf=None,oneshot=True,sliding=True,timeout=None
         f = AtMost(*alloc)
         s.add(f)
 
-    print('Solving model started %s'.format(datetime.datetime.now()))
+    print('Solving model started {}'.format(datetime.datetime.now()))
+    start = time.time()
     print(s.check())
-    print('Completed solving model %s'.format(datetime.datetime.now()))
+    end = time.time()
+    print('Completed solving model {}'.format(datetime.datetime.now()))
     
 
 
@@ -159,8 +162,11 @@ def pebbleGame(g,out,dev,cycles,outf=None,oneshot=True,sliding=True,timeout=None
             for v in range(V):
                 print(' %3d'% ( boolP(m[prevAssigned[v][t]])), end="")
             print("",end="\n")
+        print('solved in: %.2f' % (end-start))
+        return True, "{:.2f}".format(end-start)
     else:
         print('Model could not be solved')
+        return False, 'unsat'
 
 
 
@@ -199,7 +205,7 @@ g[2] = []
     3 -> 5
     4 -> 5
 '''
-g = dict()
+#g = dict()
 '''g[5] = [1,3,4]
 g[4] = [2,3]
 g[1] = [0]
@@ -432,7 +438,7 @@ if __name__ == "__main__":
 
     T = 10 # number of cycles 
 
-    N = 3  # number of registers
+    N = 2  # number of registers
     V = 7  #number of vertices in the graph
     out = [6]
     '''
@@ -441,6 +447,7 @@ if __name__ == "__main__":
     V = 4
     out = [3]
     '''
+    g = dict()
     for v in range(V):
         g[v] = []
 
