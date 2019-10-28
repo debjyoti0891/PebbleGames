@@ -53,41 +53,126 @@ g[2] = g[3] = g[0] = []'''
   2>5
 '''
 
-T = 6 # number of cycles 
-N = 4  # number of registers
+T = 10 # number of cycles 
+
+N = 3  # number of registers
 V = 7  #number of vertices in the graph
 out = [6]
+'''
+
+N = 3
+V = 4
+out = [3]
+'''
 for v in range(V):
     g[v] = []
+
+
 g[6] = [4,5]
 g[5] = [2,3,0]
 g[3] = [0]
 g[4] = [0,1]
+'''
+
+g[3] = [0,1,2]
+g[1] = [0] 
+'''
+succList = dict()
+for v in g.keys():
+    
+    for p in g[v]:
+        if p not in succList.keys():
+            succList[p] = [v]
+        else:
+            succList[p].append(v)
+
 
 # assignment variables assigned_v_t
 assigned = [[ Bool("assigned_%s_%s" % (v, t)) for t in range(T+1) ] for v in range(V) ]
 
+# previously assigned prev_v_t
+prevAssigned = [[Bool("prev_%s_%s" % (v,t)) for t in range(T+1)] for v in range(V)]
 
 s = Solver()
 # all vertices are not assigned at the start
 for v in range(V):
    s.add(assigned[v][0] == False) 
 
+for v in range(V):
+    for t in range(1,T+1):
+        orTerm = []
+        for oldT in range(t):
+            orTerm.append(assigned[v][oldT])
+        print(len(prevAssigned), len(prevAssigned[v]), v, t)
+        s.add(prevAssigned[v][t] == Or(orTerm))
+
 #final configuration 
 for v in out:
     s.add(assigned[v][T] == True)
 
-
-# register allocation 
-for t in range(1,T+1):
-    for v in range(V):
-        andTerm = []
+sliding = True 
+if not sliding:
+    # register allocation 
+    for t in range(1,T+1):
+        for v in range(V):
+            andTerm = []
+            
+            for p in g[v]:
+                print('T',t,'|',v,'<-',p)
+                andTerm.append(assigned[p][t])
+                andTerm.append(assigned[p][t-1])
+            s.add(Or(Not(assigned[v][t]), Or(assigned[v][t-1],And(andTerm))))
+else:
+    # allocation with sliding 
+    for t in range(1,T+1):
         
-        for p in g[v]:
-            print('T',t,'|',v,'<-',p)
-            andTerm.append(assigned[p][t])
-            andTerm.append(assigned[p][t-1])
-        s.add(Or(Not(assigned[v][t]),Or(assigned[v][t-1],And(andTerm))))
+        for v in range(V):
+
+            orTerm = []
+
+            # all predecessors must be pebbled
+            andTerm = []
+            
+            for p in g[v]:
+                print('T',t,'|',v,'<-',p)
+                andTerm.append(assigned[p][t])
+                andTerm.append(assigned[p][t-1])
+            orTerm.append(And(andTerm))
+            
+            # or any one pebble from a predecessor has been slided
+            for p in g[v]:
+                
+                andTerm = []
+                andTerm.append(assigned[p][t-1]) # was assigned in last cycle
+                andTerm.append(Not(assigned[p][t])) # this cycle unpebbled 
+
+                for pr in g[v]: # all the other predecessors are pebbled 
+                    if pr != p:
+                        andTerm.append(assigned[pr][t])
+                        andTerm.append(assigned[pr][t-1])
+                
+                # successor must have been pebbled previously
+                
+                for succ in succList[p]:
+
+                    if succ != v: 
+                        andTerm.append(prevAssigned[succ][t])
+                        
+                
+                orTerm.append(And(andTerm))
+            
+            s.add(Or(Not(assigned[v][t]), Or(assigned[v][t-1],Or(orTerm))))
+
+                    
+
+# constraint on single time computation
+for v in range(V):
+
+    for t in range(2,T+1):
+        OrTerm = []
+        for oldt in range(t):
+            OrTerm.append(And(assigned[v][oldt], Not(assigned[v][oldt+1])))
+        s.add(Or(Not(Or(OrTerm)), Not(assigned[v][t])))
 
 # constraint on number of allocations
 for t in range(1,T+1):
@@ -110,7 +195,7 @@ def boolP(s):
 
 if(s.check() == sat):
     m = s.model()
-    print("Assignment q->v")
+    print("Assignment d->v")
     print('t   |',end='')
     for v in range(V):
         print(" %3d" % v, end="")
@@ -120,6 +205,20 @@ if(s.check() == sat):
         for v in range(V):
             print(' %3d'% ( boolP(m[assigned[v][t]])), end="")
         print("",end="\n")
+    
+
+    print("\n Prev Assignment d->v")
+    print('t   |',end='')
+    for v in range(V):
+        print(" %3d" % v, end="")
+    print("")
+    for t in range(T+1):
+        print("t%3d|"%(t),end="")
+        for v in range(V):
+            print(' %3d'% ( boolP(m[prevAssigned[v][t]])), end="")
+        print("",end="\n")
+else:
+    print('Model could not be solved')
 
 '''
 #for c in s.assertions():
